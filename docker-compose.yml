@@ -129,34 +129,57 @@ services:
       - nattery-network
     restart: unless-stopped
 
-  # Edge Bridge Service (for Raspberry Pi deployment)
+  # Edge Bridge Service (Modbus-MQTT Bridge)
   edge-bridge:
     build:
       context: ./services/edge-bridge
       dockerfile: Dockerfile
+    container_name: nattery-edge-bridge
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
     environment:
+      - PORT=8000
+      - LOG_LEVEL=INFO
       - PYTHON_ENV=production
-      - MQTT_BROKER_URL=mqtt://mosquitto:1883
-      - MQTT_USERNAME=nattery
-      - MQTT_PASSWORD=password
-      - REDIS_URL=redis://redis:6379
       - MODBUS_PORT=/dev/ttyUSB0
       - MODBUS_BAUDRATE=9600
       - MODBUS_SLAVE_ID=1
       - MODBUS_TIMEOUT=3
+      - MODBUS_RETRY_COUNT=3
+      - MODBUS_RETRY_DELAY=1.0
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - MQTT_USERNAME=nattery
+      - MQTT_PASSWORD=password
+      - MQTT_CLIENT_ID=edge-bridge
+      - MQTT_KEEPALIVE=60
+      - MQTT_QOS=1
+      - MQTT_TOPIC_PREFIX=nattery
+      - DATA_COLLECTION_INTERVAL=5
+      - HEALTH_CHECK_INTERVAL=30
+      - MAX_CONSECUTIVE_FAILURES=5
+      - MAX_QUEUE_SIZE=100
+      - COMMAND_TIMEOUT=30
+      - REDIS_URL=redis://redis:6379
+      - DEVICE_ID=inverter-001
+      - DEVICE_TYPE=inverter
+      - DEVICE_MODEL=growatt-spf-5000
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  # USB-RS485 converter
+    privileged: true  # Required for hardware access
     depends_on:
       - mosquitto
       - redis
     networks:
       - nattery-network
-    restart: unless-stopped
-    # Only deploy on edge devices
-    deploy:
-      placement:
-        constraints:
-          - node.labels.type == edge
+    volumes:
+      - ./logs/edge-bridge:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # PostgreSQL Database
   postgres:

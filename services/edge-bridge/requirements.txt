@@ -1,12 +1,14 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.2
+pydantic==2.5.0
 pydantic-settings==2.1.0
 pymodbus==3.5.4
 paho-mqtt==1.6.1
 redis==5.0.1
+psutil==5.9.6
 asyncio-mqtt==0.16.1
 python-dotenv==1.0.0
 structlog==23.2.0
 tenacity==8.2.3
-pyserial==3.5 
+pyserial==3.5
+requests==2.31.0 

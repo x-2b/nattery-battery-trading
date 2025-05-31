@@ -119,9 +119,10 @@ Battery ← Inverter (Firmware) ← Modbus RTU ← USB Converter ← Raspberry P
 - **Purpose**: Hardware communication bridge
 - **Responsibilities**:
   - Modbus RTU communication with inverter
-  - Command queue serialization
-  - MQTT message publishing
-  - Hardware fault detection
+  - Command queue serialization (critical constraint)
+  - MQTT message publishing to microservices
+  - Hardware fault detection and alerting
+  - Real-time data collection and enhancement
 - **Tech Stack**: Python, FastAPI, PyModbus, Paho-MQTT
 
 ### Infrastructure Services
@@ -279,7 +280,7 @@ Key performance indicators:
 The project follows a structured 9-phase implementation:
 
 1. ✅ **Phase 1**: Project Scaffolding & Core Infrastructure
-2. 🔄 **Phase 2**: Edge Bridge Service (Modbus-MQTT Bridge)
+2. ✅ **Phase 2**: Edge Bridge Service (Modbus-MQTT Bridge)
 3. 📋 **Phase 3**: Device Service
 4. 📋 **Phase 4**: Trading Service
 5. 📋 **Phase 5**: Analytics Service

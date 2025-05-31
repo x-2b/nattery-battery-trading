@@ -1,7 +1,7 @@
 # Nattery Battery Energy Trading System
 # Development and Deployment Makefile
 
-.PHONY: help setup dev build start stop restart logs clean test lint type-check docker-build docker-up docker-down reset
+.PHONY: help setup dev build start stop restart logs clean test lint type-check docker-build docker-up docker-down reset edge-bridge-dev edge-bridge-logs edge-bridge-shell edge-bridge-test
 
 # Default target
 help:
@@ -24,6 +24,10 @@ help:
 	@echo "  docker-up    - Start services with Docker Compose"
 	@echo "  docker-down  - Stop and remove Docker containers"
 	@echo "  reset        - Complete reset (remove containers, volumes, clean build)"
+	@echo "  edge-bridge-dev - Start Edge Bridge in development mode"
+	@echo "  edge-bridge-logs - Show Edge Bridge logs"
+	@echo "  edge-bridge-shell - Access Edge Bridge container shell"
+	@echo "  edge-bridge-test - Test Edge Bridge connectivity"
 
 # Initial setup
 setup:
@@ -148,4 +152,20 @@ health:
 	@curl -f http://localhost:3001/health || echo "Device service not responding"
 	@curl -f http://localhost:3002/health || echo "Trading service not responding"
 	@curl -f http://localhost:3003/health || echo "Analytics service not responding"
-	@curl -f http://localhost:3004/health || echo "User service not responding" 
+	@curl -f http://localhost:3004/health || echo "User service not responding"
+
+# Edge Bridge specific commands
+edge-bridge-dev: ## Start Edge Bridge in development mode
+	@echo "Starting Edge Bridge Service in development mode..."
+	cd services/edge-bridge && python main.py
+
+edge-bridge-logs: ## Show Edge Bridge logs
+	docker-compose logs -f edge-bridge
+
+edge-bridge-shell: ## Access Edge Bridge container shell
+	docker-compose exec edge-bridge /bin/bash
+
+edge-bridge-test: ## Test Edge Bridge connectivity
+	@echo "Testing Edge Bridge connectivity..."
+	curl -f http://localhost:8000/health || echo "Edge Bridge not responding"
+	curl -f http://localhost:8000/status || echo "Edge Bridge status unavailable" 
