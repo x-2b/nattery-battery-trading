@@ -1,0 +1,256 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - device-service
+      - trading-service
+      - analytics-service
+      - user-service
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://localhost
+    depends_on:
+      - device-service
+      - trading-service
+      - analytics-service
+      - user-service
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # Device Service
+  device-service:
+    build:
+      context: ./services/device-service
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://nattery:password@postgres:5432/nattery
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://nattery:password@rabbitmq:5672
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=nattery
+      - INFLUXDB_BUCKET=energy_data
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - mosquitto
+      - influxdb
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # Trading Service
+  trading-service:
+    build:
+      context: ./services/trading-service
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://nattery:password@postgres:5432/nattery
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://nattery:password@rabbitmq:5672
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=nattery
+      - INFLUXDB_BUCKET=energy_data
+      - ENTSOE_API_TOKEN=${ENTSOE_API_TOKEN}
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - influxdb
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://nattery:password@postgres:5432/nattery
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://nattery:password@rabbitmq:5672
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=nattery
+      - INFLUXDB_BUCKET=energy_data
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - influxdb
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # User Service
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://nattery:password@postgres:5432/nattery
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://nattery:password@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=24h
+      - JWT_REFRESH_EXPIRES_IN=7d
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - nattery-network
+    restart: unless-stopped
+
+  # Edge Bridge Service (for Raspberry Pi deployment)
+  edge-bridge:
+    build:
+      context: ./services/edge-bridge
+      dockerfile: Dockerfile
+    environment:
+      - PYTHON_ENV=production
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - MQTT_USERNAME=nattery
+      - MQTT_PASSWORD=password
+      - REDIS_URL=redis://redis:6379
+      - MODBUS_PORT=/dev/ttyUSB0
+      - MODBUS_BAUDRATE=9600
+      - MODBUS_SLAVE_ID=1
+      - MODBUS_TIMEOUT=3
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    depends_on:
+      - mosquitto
+      - redis
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    # Only deploy on edge devices
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == edge
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=nattery
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=nattery
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nattery"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # InfluxDB (Time-series database)
+  influxdb:
+    image: influxdb:2.7-alpine
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=nattery
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password
+      - DOCKER_INFLUXDB_INIT_ORG=nattery
+      - DOCKER_INFLUXDB_INIT_BUCKET=energy_data
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis (Caching and session store)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # RabbitMQ (Message broker for service communication)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=nattery
+      - RABBITMQ_DEFAULT_PASS=password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mosquitto MQTT Broker (IoT device communication)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - nattery-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "test", "-m", "test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  nattery-network:
+    driver: bridge 

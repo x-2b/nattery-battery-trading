@@ -1,0 +1,58 @@
+{
+  "name": "nattery",
+  "version": "1.0.0",
+  "description": "Scalable microservices-based battery energy trading system",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "services/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"yarn workspace @nattery/frontend dev\" \"yarn workspace @nattery/device-service dev\" \"yarn workspace @nattery/trading-service dev\" \"yarn workspace @nattery/analytics-service dev\" \"yarn workspace @nattery/user-service dev\"",
+    "build": "yarn workspaces foreach -A run build",
+    "build:types": "yarn workspace @nattery/types build",
+    "build:services": "yarn workspace @nattery/device-service build && yarn workspace @nattery/trading-service build && yarn workspace @nattery/analytics-service build && yarn workspace @nattery/user-service build",
+    "build:frontend": "yarn workspace @nattery/frontend build",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "restart": "docker-compose restart",
+    "logs": "docker-compose logs -f",
+    "clean": "yarn workspaces foreach -A run clean",
+    "lint": "yarn workspaces foreach -A run lint",
+    "test": "yarn workspaces foreach -A run test",
+    "type-check": "yarn workspaces foreach -A run type-check",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down -v",
+    "docker:logs": "docker-compose logs -f",
+    "setup": "yarn install && yarn build:types",
+    "reset": "docker-compose down -v && docker system prune -f && yarn clean && yarn install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/nattery.git"
+  },
+  "keywords": [
+    "energy",
+    "trading",
+    "battery",
+    "microservices",
+    "iot",
+    "modbus",
+    "mqtt",
+    "typescript",
+    "nextjs",
+    "docker"
+  ],
+  "author": "Nattery Team",
+  "license": "MIT"
+} 
