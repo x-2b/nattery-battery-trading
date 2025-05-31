@@ -41,16 +41,32 @@ services:
     build:
       context: ./services/device-service
       dockerfile: Dockerfile
+    container_name: nattery-device-service
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
       - NODE_ENV=production
+      - PORT=3001
       - DATABASE_URL=postgresql://nattery:password@postgres:5432/nattery
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://nattery:password@rabbitmq:5672
       - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - MQTT_USERNAME=nattery
+      - MQTT_PASSWORD=password
+      - MQTT_CLIENT_ID=device-service
+      - MQTT_TOPIC_PREFIX=nattery
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=nattery
       - INFLUXDB_BUCKET=energy_data
+      - CORS_ORIGIN=https://localhost
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - HEALTH_CHECK_INTERVAL=30000
+      - DATA_BATCH_SIZE=100
+      - DATA_FLUSH_INTERVAL=5000
+      - DATA_RETENTION_DAYS=365
     depends_on:
       - postgres
       - redis
@@ -59,7 +75,14 @@ services:
       - influxdb
     networks:
       - nattery-network
-    restart: unless-stopped
+    volumes:
+      - ./logs/device-service:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Trading Service
   trading-service:
@@ -179,7 +202,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
 
   # PostgreSQL Database
   postgres:

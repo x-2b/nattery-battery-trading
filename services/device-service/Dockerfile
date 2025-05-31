@@ -1,49 +1,75 @@
-# Device Service Dockerfile
-FROM node:18-alpine AS base
+# Multi-stage build for Device Service
+FROM node:18-alpine AS builder
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Set working directory
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+# Copy package files
+COPY package*.json ./
+COPY yarn.lock ./
 
-# Build the source code
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy source code
 COPY . .
+
+# Generate Prisma client
+RUN yarn prisma generate
 
 # Build the application
 RUN yarn build
 
-# Production image
-FROM base AS runner
+# Production stage
+FROM node:18-alpine AS production
+
+# Install runtime dependencies
+RUN apk add --no-cache dumb-init
+
+# Create non-root user
+RUN addgroup -g 1001 -S nattery && \
+    adduser -S nattery -u 1001
+
+# Set working directory
 WORKDIR /app
 
-ENV NODE_ENV production
+# Copy package files
+COPY package*.json ./
+COPY yarn.lock ./
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nodejs
+# Install production dependencies only
+RUN yarn install --frozen-lockfile --production && \
+    yarn cache clean
 
-# Copy built application
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./package.json
+# Copy built application from builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma ./prisma
 
-USER nodejs
+# Copy any additional runtime files
+COPY --from=builder /app/package.json ./
 
+# Create logs directory
+RUN mkdir -p logs && chown -R nattery:nattery logs
+
+# Change ownership to nattery user
+RUN chown -R nattery:nattery /app
+
+# Switch to non-root user
+USER nattery
+
+# Expose port
 EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3001/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
 
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Run the application
 CMD ["node", "dist/index.js"] 

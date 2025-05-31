@@ -1,0 +1,283 @@
+// Prisma schema for Device Service
+// This defines the database schema for device management, commands, and events
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Device model - represents physical devices (inverters, batteries, etc.)
+model Device {
+  id          String   @id @default(cuid())
+  deviceId    String   @unique @map("device_id") // External device identifier
+  deviceType  String   @map("device_type") // inverter, battery, etc.
+  name        String?
+  description String?
+  
+  // Device metadata
+  model       String?
+  manufacturer String?
+  serialNumber String? @map("serial_number")
+  firmwareVersion String? @map("firmware_version")
+  
+  // Connection info
+  status      DeviceStatus @default(OFFLINE)
+  lastSeen    DateTime?    @map("last_seen")
+  ipAddress   String?      @map("ip_address")
+  macAddress  String?      @map("mac_address")
+  
+  // Configuration
+  config      Json?        // Device-specific configuration
+  capabilities Json?       // Device capabilities and features
+  
+  // Location and grouping
+  location    String?
+  group       String?
+  tags        String[]
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  commands    DeviceCommand[]
+  events      DeviceEvent[]
+  alerts      DeviceAlert[]
+  
+  @@map("devices")
+}
+
+// Device status enumeration
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+  MAINTENANCE
+  UNKNOWN
+}
+
+// Device command model - represents commands sent to devices
+model DeviceCommand {
+  id          String        @id @default(cuid())
+  commandId   String        @unique @map("command_id") // External command identifier
+  deviceId    String        @map("device_id")
+  
+  // Command details
+  commandType String        @map("command_type")
+  payload     Json
+  priority    CommandPriority @default(NORMAL)
+  
+  // Execution tracking
+  status      CommandStatus @default(PENDING)
+  result      Json?
+  error       String?
+  
+  // Timing
+  scheduledAt DateTime?     @map("scheduled_at")
+  executedAt  DateTime?     @map("executed_at")
+  completedAt DateTime?     @map("completed_at")
+  timeout     Int           @default(30) // seconds
+  
+  // Retry logic
+  retryCount  Int           @default(0) @map("retry_count")
+  maxRetries  Int           @default(3) @map("max_retries")
+  
+  // Metadata
+  source      String?       // API, scheduler, automation, etc.
+  userId      String?       @map("user_id")
+  
+  // Timestamps
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  
+  // Relations
+  device      Device        @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  @@map("device_commands")
+  @@index([deviceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Command priority enumeration
+enum CommandPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+// Command status enumeration
+enum CommandStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+// Device event model - represents events and state changes
+model DeviceEvent {
+  id        String    @id @default(cuid())
+  deviceId  String    @map("device_id")
+  
+  // Event details
+  eventType String    @map("event_type")
+  category  EventCategory @default(INFO)
+  message   String
+  data      Json?
+  
+  // Context
+  source    String?   // mqtt, api, internal, etc.
+  correlationId String? @map("correlation_id")
+  
+  // Timestamps
+  timestamp DateTime  @default(now())
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  device    Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  @@map("device_events")
+  @@index([deviceId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([category])
+}
+
+// Event category enumeration
+enum EventCategory {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+  DEBUG
+}
+
+// Device alert model - represents alerts and notifications
+model DeviceAlert {
+  id          String      @id @default(cuid())
+  deviceId    String      @map("device_id")
+  
+  // Alert details
+  alertType   String      @map("alert_type")
+  severity    AlertSeverity
+  title       String
+  message     String
+  data        Json?
+  
+  // Alert state
+  status      AlertStatus @default(ACTIVE)
+  acknowledged Boolean    @default(false)
+  acknowledgedBy String?  @map("acknowledged_by")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  
+  // Resolution
+  resolved    Boolean     @default(false)
+  resolvedBy  String?     @map("resolved_by")
+  resolvedAt  DateTime?   @map("resolved_at")
+  resolution  String?
+  
+  // Escalation
+  escalated   Boolean     @default(false)
+  escalatedAt DateTime?   @map("escalated_at")
+  escalationLevel Int     @default(0) @map("escalation_level")
+  
+  // Timestamps
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  // Relations
+  device      Device      @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  
+  @@map("device_alerts")
+  @@index([deviceId])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Alert severity enumeration
+enum AlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// Alert status enumeration
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}
+
+// Device configuration model - for storing device-specific settings
+model DeviceConfig {
+  id        String   @id @default(cuid())
+  deviceId  String   @map("device_id")
+  key       String
+  value     Json
+  dataType  String   @map("data_type") // string, number, boolean, json
+  
+  // Metadata
+  category  String?
+  description String?
+  isSecret  Boolean  @default(false) @map("is_secret")
+  
+  // Validation
+  validation Json?   // JSON schema for validation
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@unique([deviceId, key])
+  @@map("device_configs")
+  @@index([deviceId])
+  @@index([category])
+}
+
+// Device metrics summary - for quick access to latest metrics
+model DeviceMetrics {
+  id        String   @id @default(cuid())
+  deviceId  String   @unique @map("device_id")
+  
+  // Latest values
+  batteryVoltage    Float?   @map("battery_voltage")
+  batteryCurrent    Float?   @map("battery_current")
+  batteryPower      Float?   @map("battery_power")
+  batterySoc        Float?   @map("battery_soc")
+  batteryTemperature Float?  @map("battery_temperature")
+  
+  acVoltageOutput   Float?   @map("ac_voltage_output")
+  acCurrentOutput   Float?   @map("ac_current_output")
+  acPowerOutput     Float?   @map("ac_power_output")
+  
+  pvVoltage         Float?   @map("pv_voltage")
+  pvCurrent         Float?   @map("pv_current")
+  pvPower           Float?   @map("pv_power")
+  
+  loadPower         Float?   @map("load_power")
+  workingMode       Int?     @map("working_mode")
+  faultCode         Int?     @map("fault_code")
+  
+  // Calculated values
+  energyFlow        String?  @map("energy_flow")
+  systemEfficiency  Float?   @map("system_efficiency")
+  
+  // Timestamps
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@map("device_metrics")
+  @@index([lastUpdated])
+} 

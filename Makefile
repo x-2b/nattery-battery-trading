@@ -1,7 +1,7 @@
 # Nattery Battery Energy Trading System
 # Development and Deployment Makefile
 
-.PHONY: help setup dev build start stop restart logs clean test lint type-check docker-build docker-up docker-down reset edge-bridge-dev edge-bridge-logs edge-bridge-shell edge-bridge-test
+.PHONY: help setup dev build start stop restart logs clean test lint type-check docker-build docker-up docker-down reset edge-bridge-dev edge-bridge-logs edge-bridge-shell edge-bridge-test device-service-dev device-service-logs device-service-shell device-service-test device-service-db-migrate device-service-db-generate device-service-db-studio
 
 # Default target
 help:
@@ -28,6 +28,13 @@ help:
 	@echo "  edge-bridge-logs - Show Edge Bridge logs"
 	@echo "  edge-bridge-shell - Access Edge Bridge container shell"
 	@echo "  edge-bridge-test - Test Edge Bridge connectivity"
+	@echo "  device-service-dev - Start Device Service in development mode"
+	@echo "  device-service-logs - Show Device Service logs"
+	@echo "  device-service-shell - Access Device Service container shell"
+	@echo "  device-service-test - Test Device Service connectivity"
+	@echo "  device-service-db-migrate - Run Device Service database migrations"
+	@echo "  device-service-db-generate - Generate Device Service Prisma client"
+	@echo "  device-service-db-studio - Open Device Service Prisma Studio"
 
 # Initial setup
 setup:
@@ -168,4 +175,32 @@ edge-bridge-shell: ## Access Edge Bridge container shell
 edge-bridge-test: ## Test Edge Bridge connectivity
 	@echo "Testing Edge Bridge connectivity..."
 	curl -f http://localhost:8000/health || echo "Edge Bridge not responding"
-	curl -f http://localhost:8000/status || echo "Edge Bridge status unavailable" 
+	curl -f http://localhost:8000/status || echo "Edge Bridge status unavailable"
+
+# Device Service specific commands
+device-service-dev: ## Start Device Service in development mode
+	@echo "Starting Device Service in development mode..."
+	cd services/device-service && yarn dev
+
+device-service-logs: ## Show Device Service logs
+	docker-compose logs -f device-service
+
+device-service-shell: ## Access Device Service container shell
+	docker-compose exec device-service /bin/sh
+
+device-service-test: ## Test Device Service connectivity
+	@echo "Testing Device Service connectivity..."
+	curl -f http://localhost:3001/health || echo "Device Service not responding"
+	curl -f http://localhost:3001/api/health || echo "Device Service API not responding"
+
+device-service-db-migrate: ## Run Device Service database migrations
+	@echo "Running Device Service database migrations..."
+	cd services/device-service && yarn prisma migrate dev
+
+device-service-db-generate: ## Generate Device Service Prisma client
+	@echo "Generating Device Service Prisma client..."
+	cd services/device-service && yarn prisma generate
+
+device-service-db-studio: ## Open Device Service Prisma Studio
+	@echo "Opening Device Service Prisma Studio..."
+	cd services/device-service && yarn prisma studio 
