@@ -1,461 +1,323 @@
 # Nattery - Battery Energy Trading System
 
-A scalable microservices-based application for controlling and monitoring house batteries to enable energy trading through peak shaving and arbitrage opportunities.
+[![GitHub](https://img.shields.io/badge/GitHub-x--2b%2Fnattery--battery--trading-blue?logo=github)](https://github.com/x-2b/nattery-battery-trading)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)](https://docs.docker.com/compose/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 
-## 🏗️ System Architecture Overview
+A scalable, microservices-based system for controlling and monitoring house batteries to enable energy trading through peak shaving and arbitrage strategies.
 
-### Data Flow
+## 🏗️ Architecture Overview
+
+Nattery implements a distributed architecture designed for reliability, scalability, and real-time performance:
+
 ```
 Battery ← Inverter (Firmware) ← Modbus RTU ← USB Converter ← Raspberry Pi ← MQTT ← Microservices ← Web App
 ```
 
-### High-Level Architecture
+### Key Components
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend Layer                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Next.js 14 + TypeScript + Tailwind CSS + Shadcn/ui             │ 
-│  - Real-time battery monitoring dashboard                       │
-│  - Energy trading controls and strategies                       │
-│  - Analytics, reporting, and performance metrics                │
-│  - Alert management and system health monitoring                │
-└─────────────────────────────────────────────────────────────────┘
-                                │ WebSocket + REST API
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      API Gateway (Nginx)                        │
-├─────────────────────────────────────────────────────────────────┤
-│  - Load balancing across microservices                          │
-│  - Authentication and authorization                             │
-│  - Rate limiting and API protection                             │
-│  - WebSocket proxy for real-time communication                  │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Microservices Layer                          │
-├─────────────────┬─────────────────┬─────────────────┬───────────┤
-│  Device Service │ Trading Service │ Analytics Svc   │ User Svc  │
-│                 │                 │                 │           │
-│ • Inverter comm │ • Market data   │ • Energy usage  │ • Auth    │
-│ • Battery mon   │ • Trading algos │ • Performance   │ • Profile │
-│ • Commands      │ • Peak shaving  │ • Predictions   │ • Settings│
-│ • Health check  │ • Arbitrage     │ • Reporting     │ • Alerts  │
-└─────────────────┴─────────────────┴─────────────────┴───────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Message Broker Layer                         │
-│  ┌─────────────┬─────────────────┬─────────────────────────────┐ │
-│  │    MQTT     │    RabbitMQ     │         Redis               │ │
-│  │ (IoT Comms) │ (Service Msgs)  │    (Caching/Sessions)       │ │
-│  │             │                 │                             │ │
-│  │ • Telemetry │ • Trading Events│ • User Sessions             │ │
-│  │ • Commands  │ • Notifications │ • API Caching               │ │
-│  │ • Alerts    │ • Job Queues    │ • Real-time Data            │ │
-│  └─────────────┴─────────────────┴─────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Data Layer                                 │
-│  ┌─────────────────────────────┬─────────────────────────────┐   │
-│  │        PostgreSQL           │         InfluxDB            │   │
-│  │    (Transactional Data)     │     (Time-Series Data)      │   │
-│  │                             │                             │   │
-│  │ • User accounts & settings  │ • Battery telemetry         │   │
-│  │ • Trading strategies        │ • Power measurements        │   │
-│  │ • Trading orders & history  │ • Energy flow data          │   │
-│  │ • System configuration      │ • Performance metrics       │   │
-│  └─────────────────────────────┴─────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Edge Layer (Raspberry Pi)                  │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │              Modbus-MQTT Bridge Service                     │ │
-│  │                                                             │ │
-│  │ • Modbus RTU communication (9600 baud, RS485)               │ │
-│  │ • Command queue management (serialized access)              │ │
-│  │ • Telemetry publishing to MQTT                              │ │
-│  │ • Health monitoring and error recovery                      │ │
-│  │ • Local data buffering and retry logic                      │ │
-│  │                                                             │ │
-│  │ **Note:** The Edge Bridge is the ONLY component with direct │ │
-│  │ Modbus access. All other services interact via MQTT.        │ │
-│  │ **Strictly Serialized Modbus Access:** All Modbus commands  │ │
-│  │ are queued and executed one at a time to ensure protocol    │ │
-│  │ compliance and device safety.                               │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                                │ Modbus RTU (Single Serial Connection)
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Hardware Layer                               │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                    Inverter System                          │ │
-│  │                                                             │ │
-│  │ • Battery management and control (via firmware)             │ │
-│  │ • PV input management and MPPT                              │ │
-│  │ • Grid connection monitoring and control                    │ │
-│  │ • Load output management                                    │ │
-│  │ • Safety and protection systems                             │ │
-│  │                                                             │ │
-│  │ Connected Battery: Fully managed by inverter firmware       │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **Frontend**: Next.js 14 + TypeScript + Tailwind CSS + Shadcn/ui
+- **API Gateway**: Nginx with SSL termination, load balancing, and rate limiting
+- **Microservices**: Device, Trading, Analytics, User, and Edge Bridge services
+- **Message Brokers**: MQTT (IoT), RabbitMQ (services), Redis (caching)
+- **Databases**: PostgreSQL (transactional), InfluxDB (time-series)
+- **Edge Computing**: Python-based Modbus-MQTT bridge on Raspberry Pi
 
----
+## 🚀 Quick Start
 
-## 🚦 How It Works
+### Prerequisites
 
-1. **User Action**: User issues a command (e.g., discharge battery) via the web app.
-2. **API Gateway**: The command is routed through the API Gateway to the appropriate microservice.
-3. **Service Layer**: The relevant service (e.g., Trading or Device Service) publishes the command to MQTT.
-4. **Edge Bridge**: The edge bridge receives the command, queues it, and executes it via Modbus RTU (one at a time).
-5. **Inverter**: The inverter acts on the command, and telemetry is sent back through the same path for real-time feedback to the user.
+- **Node.js** 18+ and **Yarn** 1.22+
+- **Docker** and **Docker Compose**
+- **Make** (optional, for convenience commands)
 
----
+### Installation
 
-## 🐳 Containerized Microservices Architecture
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/x-2b/nattery-battery-trading.git
+   cd nattery-battery-trading
+   ```
 
-### Core Principles
-- **Single Responsibility**: Each service handles one business domain
-- **Independent Deployment**: Services can be deployed and scaled independently
-- **Technology Agnostic**: Services can use different tech stacks
-- **Fault Isolation**: Failure in one service doesn't affect others
-- **Balena OS Ready**: All services containerized for edge deployment
+2. **Setup environment**
+   ```bash
+   make env          # Copy env.example to .env
+   make setup        # Install dependencies and build types
+   ```
 
-### Service Breakdown
+3. **Start development environment**
+   ```bash
+   make dev          # Start all services in development mode
+   # OR
+   make docker-up    # Start with Docker Compose
+   ```
 
-#### 1. **Frontend Service** (`frontend/`)
-- **Technology**: Next.js 14, TypeScript, Tailwind CSS
-- **Purpose**: User interface for monitoring and control
-- **Container**: Single-page application with Nginx
-- **Ports**: 3000
-- **Dependencies**: API Gateway
+4. **Access the application**
+   - **Web Interface**: https://localhost (with SSL)
+   - **API Gateway**: https://localhost/api/
+   - **RabbitMQ Management**: http://localhost:15672
+   - **InfluxDB UI**: http://localhost:8086
 
-#### 2. **API Gateway** (`gateway/`)
-- **Technology**: Nginx with custom configuration
-- **Purpose**: Request routing, authentication, load balancing
-- **Container**: Nginx with SSL termination
-- **Ports**: 80, 443
-- **Dependencies**: All backend services
+## 📋 Available Commands
 
-#### 3. **Device Service** (`services/device-service/`)
-- **Technology**: Node.js + TypeScript
-- **Purpose**: Inverter communication and device management
-- **Container**: Node.js runtime
-- **Ports**: 3001
-- **Dependencies**: MQTT, PostgreSQL, InfluxDB
+| Command | Description |
+|---------|-------------|
+| `make setup` | Initial project setup |
+| `make dev` | Start development environment |
+| `make build` | Build all services |
+| `make start` | Start with Docker Compose |
+| `make stop` | Stop all services |
+| `make logs` | Show service logs |
+| `make test` | Run all tests |
+| `make lint` | Run linting |
+| `make clean` | Clean build artifacts |
+| `make reset` | Complete reset |
 
-#### 4. **Trading Service** (`services/trading-service/`)
-- **Technology**: Node.js + TypeScript
-- **Purpose**: Energy trading algorithms and market data
-- **Container**: Node.js runtime
-- **Ports**: 3002
-- **Dependencies**: MQTT, PostgreSQL, RabbitMQ
+## 🏢 Microservices Architecture
 
-#### 5. **Analytics Service** (`services/analytics-service/`)
-- **Technology**: Node.js + TypeScript
-- **Purpose**: Data analysis, reporting, and predictions
-- **Container**: Node.js runtime
-- **Ports**: 3003
-- **Dependencies**: PostgreSQL, InfluxDB
+### Core Services
 
-#### 6. **User Service** (`services/user-service/`)
-- **Technology**: Node.js + TypeScript
-- **Purpose**: Authentication, user management, settings
-- **Container**: Node.js runtime
-- **Ports**: 3004
-- **Dependencies**: PostgreSQL, Redis
+#### 🔌 Device Service (Port 3001)
+- **Purpose**: Device communication and control
+- **Responsibilities**:
+  - MQTT message handling from edge bridge
+  - Real-time device status monitoring
+  - Command queue management with priority levels
+  - WebSocket connections for live updates
+- **Tech Stack**: Node.js, TypeScript, Socket.IO, MQTT
 
-#### 7. **Edge Bridge Service** (`edge/modbus-bridge/`)
-- **Technology**: Python 3.11
-- **Purpose**: Modbus-MQTT bridge with command queuing
-- **Container**: Python runtime with serial access
-- **Ports**: N/A (serial communication)
-- **Dependencies**: MQTT, USB/Serial device access
-- **Note**: The Edge Bridge is the only component with direct Modbus access. All other services interact with the inverter via MQTT.
-- **Strictly Serialized Modbus Access**: All Modbus commands are queued and executed one at a time to ensure protocol compliance and device safety.
+#### 📈 Trading Service (Port 3002)
+- **Purpose**: Energy trading and price optimization
+- **Responsibilities**:
+  - Entsoe API integration for day-ahead prices
+  - Trading strategy execution (peak shaving, arbitrage)
+  - Order management and execution
+  - Price forecasting and optimization
+- **Tech Stack**: Node.js, TypeScript, Axios, Node-Schedule
+
+#### 📊 Analytics Service (Port 3003)
+- **Purpose**: Data analysis and reporting
+- **Responsibilities**:
+  - Time-series data processing
+  - Performance metrics calculation
+  - Report generation
+  - Alert management
+- **Tech Stack**: Node.js, TypeScript, InfluxDB, Lodash
+
+#### 👤 User Service (Port 3004)
+- **Purpose**: Authentication and authorization
+- **Responsibilities**:
+  - JWT-based authentication
+  - Role-based access control
+  - User profile management
+  - Session management
+- **Tech Stack**: Node.js, TypeScript, Passport, bcrypt
+
+#### 🌉 Edge Bridge Service (Port 8000)
+- **Purpose**: Hardware communication bridge
+- **Responsibilities**:
+  - Modbus RTU communication with inverter
+  - Command queue serialization
+  - MQTT message publishing
+  - Hardware fault detection
+- **Tech Stack**: Python, FastAPI, PyModbus, Paho-MQTT
 
 ### Infrastructure Services
 
-#### 8. **MQTT Broker** (`infrastructure/mqtt/`)
-- **Technology**: Eclipse Mosquitto
-- **Purpose**: IoT device communication
-- **Container**: Official Mosquitto image
-- **Ports**: 1883 (MQTT), 9001 (WebSocket)
+- **PostgreSQL**: Transactional data storage
+- **InfluxDB**: Time-series energy data
+- **Redis**: Caching and session storage
+- **RabbitMQ**: Inter-service messaging
+- **Mosquitto MQTT**: IoT device communication
+- **Nginx**: API gateway and load balancer
 
-#### 9. **Message Queue** (`infrastructure/rabbitmq/`)
-- **Technology**: RabbitMQ
-- **Purpose**: Service-to-service messaging
-- **Container**: Official RabbitMQ image
-- **Ports**: 5672 (AMQP), 15672 (Management)
+## 🔧 Configuration
 
-#### 10. **Cache & Sessions** (`infrastructure/redis/`)
-- **Technology**: Redis
-- **Purpose**: Caching and session management
-- **Container**: Official Redis image
-- **Ports**: 6379
+### Environment Variables
 
-#### 11. **Primary Database** (`infrastructure/postgres/`)
-- **Technology**: PostgreSQL 15
-- **Purpose**: Transactional data storage
-- **Container**: Official PostgreSQL image
-- **Ports**: 5432
+Key configuration options in `.env`:
 
-#### 12. **Time-Series Database** (`infrastructure/influxdb/`)
-- **Technology**: InfluxDB 2.7
-- **Purpose**: Telemetry and metrics storage
-- **Container**: Official InfluxDB image
-- **Ports**: 8086
+```bash
+# Database
+DATABASE_URL="postgresql://nattery:password@postgres:5432/nattery"
+INFLUXDB_TOKEN=your-influxdb-token
 
-#### 13. **Monitoring** (`infrastructure/monitoring/`)
-- **Technology**: Prometheus + Grafana
-- **Purpose**: System monitoring and alerting
-- **Containers**: Prometheus, Grafana
-- **Ports**: 9090 (Prometheus), 3000 (Grafana)
+# Security
+JWT_SECRET=your-super-secret-jwt-key
+CORS_ORIGIN=https://localhost
 
-## 🚀 Key Features
+# External APIs
+ENTSOE_API_TOKEN=your-entsoe-api-token
 
-### Energy Trading Capabilities
-- **Peak Shaving**: Automatically discharge during peak demand hours
-- **Arbitrage Trading**: Buy low, sell high based on energy market prices
-- **Grid Services**: Frequency regulation and demand response
-- **Solar Optimization**: Maximize self-consumption of PV generation
-
-### Real-Time Monitoring
-- **Battery Status**: SOC, voltage, current, power, temperature
-- **Energy Flow**: PV generation, grid import/export, load consumption
-- **System Health**: Inverter status, alarms, communication health
-- **Performance Metrics**: Trading efficiency, energy savings
-
-### Advanced Control
-- **Remote Commands**: Charge/discharge control via web interface
-- **Automated Strategies**: Configurable trading algorithms
-- **Time-Based Control**: Scheduled charging/discharging windows
-- **Emergency Controls**: Safety shutdowns and fault management
-
-## 📁 Project Structure
-
-```
-nattery-2/
-├── frontend/                    # Next.js web application
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-├── gateway/                     # Nginx API gateway
-│   ├── Dockerfile
-│   └── nginx.conf
-├── services/
-│   ├── device-service/          # Inverter communication
-│   │   ├── Dockerfile
-│   │   ├── package.json
-│   │   └── src/
-│   ├── trading-service/         # Energy trading logic
-│   │   ├── Dockerfile
-│   │   ├── package.json
-│   │   └── src/
-│   ├── analytics-service/       # Data analysis & reporting
-│   │   ├── Dockerfile
-│   │   ├── package.json
-│   │   └── src/
-│   └── user-service/            # Authentication & user management
-│       ├── Dockerfile
-│       ├── package.json
-│       └── src/
-├── edge/
-│   └── modbus-bridge/           # Raspberry Pi edge service
-│       ├── Dockerfile
-│       ├── requirements.txt
-│       └── src/
-├── infrastructure/
-│   ├── mqtt/                    # MQTT broker configuration
-│   ├── postgres/                # Database initialization
-│   ├── monitoring/              # Prometheus & Grafana
-│   └── balena/                  # Balena OS deployment configs
-├── shared/
-│   ├── types/                   # TypeScript type definitions
-│   └── utils/                   # Common utilities
-├── docker-compose.yml           # Local development
-├── docker-compose.balena.yml    # Balena OS deployment
-└── balena.yml                   # Balena application configuration
+# Hardware (Edge Bridge)
+MODBUS_PORT=/dev/ttyUSB0
+MODBUS_BAUDRATE=9600
+MODBUS_SLAVE_ID=1
 ```
 
-## 🔧 Balena OS Deployment
+### Service Ports
 
-### Fleet Management
-- **Multi-Device Support**: Deploy to entire battery fleet
-- **Over-the-Air Updates**: Remote updates without physical access
-- **Device Monitoring**: Real-time fleet health monitoring
-- **Configuration Management**: Environment variables per device/fleet
+| Service | Port | Protocol |
+|---------|------|----------|
+| API Gateway | 80/443 | HTTP/HTTPS |
+| Frontend | 3000 | HTTP |
+| Device Service | 3001 | HTTP |
+| Trading Service | 3002 | HTTP |
+| Analytics Service | 3003 | HTTP |
+| User Service | 3004 | HTTP |
+| Edge Bridge | 8000 | HTTP |
 
-### Balena Configuration (`balena.yml`)
+## 🔒 Security Features
+
+- **SSL/TLS encryption** with automatic HTTPS redirect
+- **JWT-based authentication** with refresh tokens
+- **Rate limiting** on API endpoints
+- **CORS protection** with configurable origins
+- **Security headers** (HSTS, XSS protection, etc.)
+- **Input validation** with Zod schemas
+- **Role-based access control**
+
+## 📊 Data Flow Architecture
+
+### Real-time Data Pipeline
+
+1. **Hardware Layer**: Inverter firmware monitors battery
+2. **Edge Layer**: Raspberry Pi reads Modbus data
+3. **Communication Layer**: MQTT publishes to broker
+4. **Service Layer**: Device service processes messages
+5. **Storage Layer**: InfluxDB stores time-series data
+6. **Presentation Layer**: Frontend displays real-time updates
+
+### Command Execution Flow
+
+1. **User Interface**: Command initiated via web app
+2. **API Gateway**: Request routed to device service
+3. **Command Queue**: Priority-based queue management
+4. **MQTT Publishing**: Command sent to edge bridge
+5. **Modbus Execution**: Serial command to inverter
+6. **Status Feedback**: Confirmation via MQTT
+
+## 🏭 Production Deployment
+
+### Balena OS Integration
+
+Designed for fleet management with Balena OS:
+
 ```yaml
+# balena.yml
 version: "2"
 environment:
-  - FLEET_NAME=nattery-battery-fleet
-  - DEVICE_TYPE=raspberrypi4-64
+  - BALENA_HOST_CONFIG_gpu_mem=16
 services:
-  - frontend
-  - gateway
-  - device-service
-  - trading-service
-  - analytics-service
-  - user-service
-  - modbus-bridge
-  - mqtt
-  - redis
-  - postgres
-  - influxdb
+  nattery:
+    build: .
+    privileged: true
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
 ```
 
-### Device-Specific Configuration
-- **Serial Port Access**: USB-to-RS485 converter configuration
-- **Network Settings**: WiFi/Ethernet configuration per site
-- **Security**: Device-specific certificates and credentials
-- **Local Storage**: Persistent data volumes for databases
+### Docker Compose Production
 
-## 🔒 Security Architecture
-
-### Edge Security
-- **Device Authentication**: Unique certificates per device
-- **Encrypted Communication**: TLS for all MQTT communication
-- **Local Firewall**: Restricted network access
-- **Secure Boot**: Balena OS security features
-
-### Service Security
-- **JWT Authentication**: Stateless authentication tokens
-- **Role-Based Access**: Admin, operator, viewer roles
-- **API Rate Limiting**: Protection against abuse
-- **Input Validation**: Comprehensive data validation
-
-### Network Security
-- **VPN Access**: Secure remote access to devices
-- **Network Segmentation**: Isolated device networks
-- **Certificate Management**: Automated certificate rotation
-- **Audit Logging**: Complete audit trail
-
-## 📊 Monitoring & Observability
-
-### System Metrics
-- **Device Health**: CPU, memory, disk, temperature
-- **Communication Health**: Modbus, MQTT, network status
-- **Service Performance**: Response times, error rates
-- **Business Metrics**: Energy traded, savings, efficiency
-
-### Alerting
-- **Critical Alerts**: System failures, communication loss
-- **Warning Alerts**: Performance degradation, high usage
-- **Business Alerts**: Trading opportunities, anomalies
-- **Maintenance Alerts**: Scheduled maintenance reminders
-
-## 🌐 External Integrations
-
-### Energy Market APIs
-- **Real-Time Pricing**: Live energy market data
-- **Forecast Data**: Price predictions and trends
-- **Grid Status**: Utility grid conditions
-- **Regulatory Data**: Compliance and reporting
-
-### Weather & Solar
-- **Weather Forecasts**: Solar generation predictions
-- **Irradiance Data**: Real-time solar conditions
-- **Climate Data**: Long-term planning data
-
-## 🚦 Development Workflow
-
-### Local Development
 ```bash
-# Start all services locally
-docker-compose up -d
-
-# Start individual service for development
-docker-compose up device-service
-
-# View logs
-docker-compose logs -f trading-service
+# Production deployment
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-### Balena Deployment
+## 🧪 Testing Strategy
+
+### Unit Tests
 ```bash
-# Deploy to fleet
-balena push nattery-fleet
-
-# Deploy to specific device
-balena push <device-uuid>
-
-# Monitor deployment
-balena logs <device-uuid>
+yarn test                    # Run all unit tests
+yarn workspace @nattery/device-service test
 ```
 
-### Testing Strategy
-- **Unit Tests**: Individual service testing
-- **Integration Tests**: Service-to-service communication
-- **End-to-End Tests**: Complete workflow testing
-- **Load Tests**: Performance under high load
+### Integration Tests
+```bash
+make docker-up              # Start test environment
+make health                 # Verify service health
+```
 
-## 📈 Scalability Considerations
+### End-to-End Testing
 
-### Horizontal Scaling
-- **Service Replication**: Multiple instances per service
-- **Load Balancing**: Distribute requests across instances
-- **Database Sharding**: Partition data across databases
-- **Geographic Distribution**: Regional deployments
+Essential services for hardware testing:
+- Phase 1: Infrastructure
+- Phase 2: Edge Bridge
+- Phase 3: Device Service
+- Phase 7: Frontend
 
-### Performance Optimization
-- **Caching Strategy**: Multi-level caching
-- **Database Optimization**: Indexing and query optimization
-- **Message Queuing**: Asynchronous processing
-- **CDN Integration**: Static asset delivery
+## 📈 Monitoring & Observability
 
-## 🔄 Data Flow Architecture
+### Health Checks
 
-### Telemetry Flow
-1. **Inverter** → Modbus RTU → **Edge Bridge**
-2. **Edge Bridge** → MQTT → **Device Service**
-3. **Device Service** → InfluxDB (storage) + MQTT (real-time)
-4. **Frontend** ← WebSocket ← **API Gateway** ← Services
+All services include comprehensive health checks:
+- **Database connectivity**
+- **Message broker status**
+- **External API availability**
+- **Hardware communication**
 
-### Command Flow
-1. **Frontend** → REST API → **API Gateway**
-2. **API Gateway** → **Trading/Device Service**
-3. **Service** → MQTT → **Edge Bridge**
-4. **Edge Bridge** → Command Queue → Modbus RTU → **Inverter**
+### Logging
 
-### Event Flow
-1. **Services** → RabbitMQ → **Other Services**
-2. **Analytics Service** → Scheduled Reports
-3. **Alert Service** → Notifications → **Users**
+Structured logging with Winston:
+- **JSON format** for production
+- **Log levels**: error, warn, info, debug
+- **Service correlation** with request IDs
+
+### Metrics
+
+Key performance indicators:
+- **Energy throughput** (kWh/day)
+- **Trading profit** (€/month)
+- **System uptime** (%)
+- **Response times** (ms)
+
+## 🔄 Development Workflow
+
+### Phase-based Implementation
+
+The project follows a structured 9-phase implementation:
+
+1. ✅ **Phase 1**: Project Scaffolding & Core Infrastructure
+2. 🔄 **Phase 2**: Edge Bridge Service (Modbus-MQTT Bridge)
+3. 📋 **Phase 3**: Device Service
+4. 📋 **Phase 4**: Trading Service
+5. 📋 **Phase 5**: Analytics Service
+6. 📋 **Phase 6**: User Service
+7. 📋 **Phase 7**: Frontend Service
+8. 📋 **Phase 8**: Monitoring & Observability
+9. 📋 **Phase 9**: Balena OS Integration
+
+### Git Workflow
+
+```bash
+git checkout -b feature/phase-2-edge-bridge
+# Implement feature
+git commit -m "feat: implement edge bridge service"
+git push origin feature/phase-2-edge-bridge
+# Create pull request
+```
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Follow TypeScript and ESLint conventions**
+4. **Add tests for new functionality**
+5. **Update documentation**
+6. **Submit a pull request**
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔗 Links
+
+- **Repository**: [https://github.com/x-2b/nattery-battery-trading](https://github.com/x-2b/nattery-battery-trading)
+- **Issues**: [https://github.com/x-2b/nattery-battery-trading/issues](https://github.com/x-2b/nattery-battery-trading/issues)
+- **Documentation**: [Implementation Phases](IMPLEMENTATION_PHASES.md)
+- **Inverter Datasheet**: [inverter-datasheet.md](inverter-datasheet.md)
 
 ---
 
-## 📝 Design Decisions & Limitations
-
-### Why MQTT?
-- **IoT-Native**: MQTT is lightweight, reliable, and designed for device-to-cloud communication, making it ideal for edge devices like Raspberry Pi.
-- **Publish/Subscribe**: Enables real-time telemetry and command distribution to multiple services and UIs.
-- **Fleet Scalability**: Easily supports large numbers of devices and services.
-
-### Why Strict Modbus Serialization?
-- **Protocol Limitation**: Modbus RTU is strictly single-master and synchronous; concurrent or async access is not possible.
-- **Reliability & Safety**: Serializing all Modbus commands in a queue ensures safe, predictable operation and prevents communication errors or device faults.
-- **Edge Bridge Role**: Only the edge bridge service communicates with the inverter over Modbus; all other services interact via MQTT.
-
-### Why Containerize Everything?
-- **Service Isolation**: Each microservice runs in its own container for fault isolation and independent scaling.
-- **Balena OS Compatibility**: Containerization is required for seamless deployment, updates, and management across a distributed battery fleet.
-- **Technology Flexibility**: Allows each service to use the best-fit language and runtime.
-
-### Why Not Monolithic?
-- **Maintainability**: Microservices are easier to develop, test, and maintain independently.
-- **Scalability**: Services can be scaled horizontally as needed.
-- **Resilience**: Failures are isolated to individual services, not the whole system.
-
----
-
-This architecture provides a robust, scalable foundation for battery energy trading while maintaining simplicity in individual services and enabling efficient fleet management through Balena OS. 
+**Built with ❤️ for sustainable energy trading** 
